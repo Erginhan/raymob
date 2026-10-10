@@ -1,50 +1,22 @@
-name: Build
-
-on:
-  workflow_dispatch:
-  push:
-    branches:
-      - master
-    tags:
-      - '*'
-  pull_request:
-    branches:
-      - master
-
+name: Build APK
+on: [push]
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Check out code
-        uses: actions/checkout@v5
+      - name: Checkout Code
+        uses: actions/checkout@v3
         with:
-          submodules: true
-
-      - name: Set up Java
-        uses: actions/setup-java@v5
+          submodules: recursive
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
         with:
-          java-version: '8'
+          java-version: '17'
           distribution: 'temurin'
-
-      - name: Set up CMake
-        uses: jwlawson/actions-setup-cmake@v2
+      - name: Build APK
+        run: chmod +x ./gradlew && ./gradlew assembleDebug
+      - name: Upload APK
+        uses: actions/upload-artifact@v3
         with:
-          cmake-version: '3.30.3'
-
-      - name: Build project
-        run: |
-          chmod +x ./gradlew
-          ./gradlew build
-
-      - name: Upload debug APKs
-        uses: actions/upload-artifact@v4
-        with:
-          name: debug-apks
-          path: ./app/build/outputs/apk/debug/*.apk
-
-      - name: Upload release APKs
-        uses: actions/upload-artifact@v4
-        with:
-          name: release-apks
-          path: ./app/build/outputs/apk/release/*.apk
+          name: watersort-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
