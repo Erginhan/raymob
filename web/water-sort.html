@@ -1,0 +1,530 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Water Sort Endless</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #111; overflow: hidden; }
+  body { display: flex; align-items: center; justify-content: center; }
+  canvas {
+    display: block;
+    width: min(100vw, 56.25vh);
+    max-width: 100vw;
+    max-height: 100vh;
+    height: auto;
+    aspect-ratio: 9 / 16;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+</style>
+</head>
+<body>
+<canvas id="c" width="1080" height="1920"></canvas>
+<script>
+(() => {
+  'use strict';
+
+  const W = 1080, H = 1920, CAP = 4;
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+
+  // ---------- Shop templates (themes) ----------
+  const THEMES = [
+    { id: 'classic', name: 'Classic', price: 0, bg: '#F5F5F5', panel: '#FFFFFF', ink: '#505050', accent: '#0079F1', tube: '#E3E3E3', outline: '#000000',
+      colors: ['#E62937', '#0079F1', '#00E430', '#FDF900', '#C87AFF', '#FFA100', '#66BFFF', '#FF6DC2', '#7F6A4F', '#009E2F', '#0052AC', '#FF00FF', '#828282', '#FFFFFF'] },
+    { id: 'pastel', name: 'Pastel', price: 120, bg: '#FDF6EC', panel: '#FFFFFF', ink: '#6B5B73', accent: '#8E7DBE', tube: '#F3E9DC', outline: '#B9A8C9',
+      colors: ['#F28B82', '#8AB4F8', '#81C995', '#FDD663', '#D7AEFB', '#FCAD70', '#A8DAFF', '#F6AEBA', '#C4A484', '#C6E48B', '#7C9ECF', '#E8A0E8', '#9AA0A6', '#5FD3BC'] },
+    { id: 'ocean', name: 'Ocean', price: 200, bg: '#E0F7FA', panel: '#FFFFFF', ink: '#004D5A', accent: '#0096C7', tube: '#CDEFF5', outline: '#005F73',
+      colors: ['#0077B6', '#00B4D8', '#90E0EF', '#FFB4A2', '#03045E', '#48CAE4', '#023E8A', '#2A9D8F', '#E9C46A', '#F4A261', '#E76F51', '#264653', '#8ECAE6', '#219EBC'] },
+    { id: 'forest', name: 'Forest', price: 200, bg: '#EEF5E8', panel: '#FFFFFF', ink: '#2D4A22', accent: '#40916C', tube: '#DCE9D3', outline: '#2D4A22',
+      colors: ['#2D6A4F', '#52B788', '#D4A373', '#BC6C25', '#606C38', '#F4E285', '#9B2226', '#E76F51', '#8D99AE', '#7F5539', '#C2185B', '#3D405B', '#FFB703', '#A7C957'] },
+    { id: 'sunset', name: 'Sunset', price: 300, bg: '#FFF1E6', panel: '#FFFFFF', ink: '#5C2A3E', accent: '#F15BB5', tube: '#FFE0CC', outline: '#7A2E4B',
+      colors: ['#FF595E', '#FF924C', '#FFCA3A', '#8AC926', '#1982C4', '#6A4C93', '#F15BB5', '#00BBF9', '#9B5DE5', '#FEE440', '#00F5D4', '#D62828', '#F77F00', '#003049'] },
+    { id: 'neon', name: 'Neon', price: 400, bg: '#0D0221', panel: '#1A0B3B', ink: '#E0E0FF', accent: '#05D9E8', tube: '#1B1040', outline: '#2DE2E6',
+      colors: ['#FF2A6D', '#05D9E8', '#39FF14', '#FFE600', '#B967FF', '#FF9F1C', '#01C38D', '#FF71CE', '#FF5E00', '#A8FF60', '#3A86FF', '#F72585', '#00F5D4', '#FFFFFF'] },
+    { id: 'midnight', name: 'Midnight', price: 500, bg: '#1B1F3B', panel: '#262B50', ink: '#E2E8F0', accent: '#FDCB6E', tube: '#2B3158', outline: '#8C96C6',
+      colors: ['#FF6B6B', '#4ECDC4', '#FFE66D', '#A29BFE', '#FD79A8', '#55EFC4', '#74B9FF', '#FAB1A0', '#81ECEC', '#DFE6E9', '#FDCB6E', '#E17055', '#00CEC9', '#B2BEC3'] },
+  ];
+  const currentTheme = () => THEMES.find(th => th.id === data.theme) || THEMES[0];
+
+  // ---------- Save data ----------
+  const SAVE_KEY = 'water-sort-endless-v1';
+  const freshData = () => ({ level: 1, best: 0, coins: 0, owned: ['classic'], theme: 'classic', sound: true });
+  function loadData() {
+    try {
+      const d = Object.assign(freshData(), JSON.parse(localStorage.getItem(SAVE_KEY)) || {});
+      if (!Array.isArray(d.owned)) d.owned = ['classic'];
+      return d;
+    } catch (e) {
+      return freshData();
+    }
+  }
+  function saveData() {
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch (e) { /* storage may be blocked */ }
+  }
+  let data = loadData();
+
+  // ---------- Sound (synthesized with WebAudio, no files needed) ----------
+  let audioCtx = null, master = null, noiseBuf = null;
+  function audio() {
+    if (!audioCtx) {
+      try {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        audioCtx = new AC();
+        master = audioCtx.createGain();
+        master.gain.value = 0.4;
+        master.connect(audioCtx.destination);
+      } catch (e) { audioCtx = null; }
+    }
+    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+    return audioCtx;
+  }
+  function tone(freq, dur, o = {}) {
+    if (!data.sound) return;
+    const a = audio(); if (!a) return;
+    const t0 = a.currentTime + (o.delay || 0);
+    const osc = a.createOscillator(), g = a.createGain();
+    osc.type = o.type || 'sine';
+    osc.frequency.setValueAtTime(freq, t0);
+    if (o.slide) osc.frequency.exponentialRampToValueAtTime(o.slide, t0 + dur);
+    const v = o.vol || 0.2;
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(v, t0 + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    osc.connect(g); g.connect(master);
+    osc.start(t0); osc.stop(t0 + dur + 0.05);
+  }
+  function splash(dur, vol) {
+    if (!data.sound) return;
+    const a = audio(); if (!a) return;
+    if (!noiseBuf) {
+      noiseBuf = a.createBuffer(1, Math.floor(a.sampleRate * 0.3), a.sampleRate);
+      const d = noiseBuf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    }
+    const src = a.createBufferSource(); src.buffer = noiseBuf;
+    const f = a.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 1200; f.Q.value = 1.2;
+    const g = a.createGain(), t0 = a.currentTime;
+    g.gain.setValueAtTime(vol, t0);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    src.connect(f); f.connect(g); g.connect(master);
+    src.start(t0); src.stop(t0 + dur);
+  }
+  const SFX = {
+    select: () => tone(660, 0.07, { type: 'triangle', vol: 0.25 }),
+    drop: () => { tone(330, 0.12, { slide: 520, vol: 0.2 }); splash(0.16, 0.12); },
+    error: () => tone(170, 0.2, { type: 'square', slide: 120, vol: 0.08 }),
+    click: () => tone(520, 0.05, { type: 'triangle', vol: 0.2 }),
+    win: () => [523, 659, 784, 1046].forEach((f, i) => tone(f, 0.25, { type: 'triangle', vol: 0.25, delay: i * 0.1 })),
+    coin: () => { tone(988, 0.08, { type: 'square', vol: 0.08 }); tone(1319, 0.16, { type: 'square', vol: 0.08, delay: 0.07 }); },
+    buy: () => { tone(784, 0.1, { type: 'triangle', vol: 0.2 }); tone(1047, 0.2, { type: 'triangle', vol: 0.2, delay: 0.09 }); },
+  };
+
+  // ---------- Puzzle rules ----------
+  const clone = t => t.map(c => c.slice());
+  const top = c => (c.length ? c[c.length - 1] : -1);
+  function blockLen(c) {
+    let n = 0; const v = top(c);
+    for (let k = c.length - 1; k >= 0 && c[k] === v; k--) n++;
+    return n;
+  }
+  function why(t, a, b) {
+    if (!t[a].length) return 'That tube is empty';
+    if (a === b) return 'Same tube';
+    if (t[b].length >= CAP) return 'That tube is full';
+    if (t[b].length && top(t[b]) !== top(t[a])) return 'Colors do not match';
+    return null;
+  }
+  function pour(t, a, b) {
+    const n = Math.min(blockLen(t[a]), CAP - t[b].length), v = top(t[a]);
+    for (let k = 0; k < n; k++) { t[a].pop(); t[b].push(v); }
+  }
+  function isSolved(t) {
+    return t.every(c => !c.length || (c.length === CAP && c.every(x => x === c[0])));
+  }
+
+  // Depth-first solver with a node budget. Used to reject unsolvable random levels.
+  function solvable(start, budget) {
+    const seen = new Set();
+    let nodes = 0;
+    const key = t => t.map(c => c.join(',')).join('|');
+    function dfs(t) {
+      if (isSolved(t)) return true;
+      if (++nodes > budget) return false;
+      const k = key(t);
+      if (seen.has(k)) return false;
+      seen.add(k);
+      const moves = [];
+      for (let a = 0; a < t.length; a++) {
+        if (!t[a].length) continue;
+        const whole = blockLen(t[a]) === t[a].length;
+        for (let b = 0; b < t.length; b++) {
+          if (why(t, a, b)) continue;
+          if (!t[b].length && whole) continue; // moving a whole tube into an empty one gains nothing
+          moves.push([(t[b].length ? 2 : 0) + (whole ? 1 : 0), a, b]);
+        }
+      }
+      moves.sort((x, y) => y[0] - x[0]);
+      for (const m of moves) {
+        const nt = clone(t);
+        pour(nt, m[1], m[2]);
+        if (dfs(nt)) return true;
+        if (nodes > budget) return false;
+      }
+      return false;
+    }
+    return dfs(start);
+  }
+
+  // Deterministic PRNG, so a level always generates the same board.
+  function rng(seed) {
+    let a = seed >>> 0;
+    return () => {
+      a = (a + 0x6D2B79F5) >>> 0;
+      let t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  // Difficulty ramps with the level: more colors (up to 14) and a longer scramble.
+  function makeLevel(level) {
+    const colors = Math.min(14, 4 + Math.floor((level - 1) / 3));
+    const depth = 30 + level * 4;
+    for (let attempt = 0; ; attempt++) {
+      const r = rng(level * 7919 + attempt * 104729 + 1);
+      const t = [];
+      for (let c = 0; c < colors; c++) t.push(Array(CAP).fill(c));
+      t.push([], []); // two empty tubes to work with
+      for (let i = 0; i < depth; i++) {
+        const src = [], dst = [];
+        for (let j = 0; j < t.length; j++) if (t[j].length) src.push(j);
+        const a = src[Math.floor(r() * src.length)];
+        for (let j = 0; j < t.length; j++) if (j !== a && t[j].length < CAP) dst.push(j);
+        if (!dst.length) continue;
+        const b = dst[Math.floor(r() * dst.length)];
+        const mx = Math.min(blockLen(t[a]), CAP - t[b].length);
+        const n = 1 + Math.floor(r() * mx), v = top(t[a]);
+        for (let k = 0; k < n; k++) { t[a].pop(); t[b].push(v); }
+      }
+      if (!isSolved(t) && solvable(clone(t), 20000)) return { tubes: t, colors };
+    }
+  }
+  const levelCache = new Map();
+  function levelFor(level) {
+    if (!levelCache.has(level)) levelCache.set(level, makeLevel(level));
+    return levelCache.get(level);
+  }
+
+  // ---------- Game state ----------
+  let screen = 'menu';
+  const game = { level: 0, colors: 0, tubes: [], start: [], hist: [], sel: -1, lift: [], won: false, usedUndo: false, reward: 0, status: '' };
+  let shopMsg = '';
+  let resetArmedAt = -Infinity;
+  let ui = [];
+
+  function startLevel() {
+    const L = levelFor(data.level);
+    Object.assign(game, {
+      level: data.level, colors: L.colors, start: L.tubes, tubes: clone(L.tubes),
+      hist: [], sel: -1, won: false, usedUndo: false, reward: 0, status: 'Tap a tube to pick it up',
+    });
+    game.lift = L.tubes.map(() => 0);
+  }
+  function restart() {
+    if (game.won) { SFX.error(); return; }
+    SFX.click();
+    game.tubes = clone(game.start);
+    game.hist = []; game.sel = -1; game.usedUndo = false;
+    game.status = 'Level restarted';
+  }
+  function undo() {
+    if (game.won || !game.hist.length) { SFX.error(); return; }
+    game.tubes = game.hist.pop();
+    game.sel = -1; game.usedUndo = true;
+    game.status = 'Undid the last move';
+    SFX.click();
+  }
+  function tubeRect(i) {
+    const row = Math.floor(i / 4);
+    const inRow = Math.min(4, game.tubes.length - row * 4);
+    const x0 = (W - (inRow * 220 - 70)) / 2;
+    return { x: x0 + (i % 4) * 220, y: 400 + row * 380, w: 150, h: 300 };
+  }
+  function tapTube(i) {
+    const t = game.tubes;
+    if (game.sel < 0) {
+      if (t[i].length) { game.sel = i; game.status = 'Now choose where to pour'; SFX.select(); }
+      else { game.status = 'That tube is empty'; SFX.error(); }
+      return;
+    }
+    if (game.sel === i) { game.sel = -1; game.status = 'Tap a tube to pick it up'; SFX.click(); return; }
+    if (why(t, game.sel, i)) {
+      // Tapping another filled tube picks it up instead.
+      if (t[i].length) { game.sel = i; game.status = 'Now choose where to pour'; SFX.select(); }
+      else { game.status = why(t, game.sel, i); SFX.error(); }
+      return;
+    }
+    game.hist.push(clone(t));
+    pour(t, game.sel, i);
+    game.sel = -1;
+    game.status = 'Tap a tube to pick it up';
+    SFX.drop();
+    checkWin();
+  }
+  function checkWin() {
+    if (!isSolved(game.tubes)) return;
+    game.won = true; game.sel = -1;
+    game.reward = 10 + game.level + (game.usedUndo ? 0 : 5);
+    data.coins += game.reward;
+    data.best = Math.max(data.best, game.level);
+    data.level = game.level + 1;
+    saveData();
+    SFX.win();
+    setTimeout(SFX.coin, 450);
+  }
+
+  // ---------- Drawing helpers ----------
+  function rr(x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+  function text(str, x, y, size, color, align = 'center', alpha = 1) {
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.font = `bold ${size}px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`;
+    ctx.fillStyle = color;
+    ctx.textAlign = align;
+    ctx.textBaseline = 'middle';
+    ctx.fillText(str, x, y);
+    ctx.restore();
+  }
+  function isLight(hex) {
+    const n = parseInt(hex.slice(1), 16);
+    return ((n >> 16) * 0.299 + ((n >> 8) & 255) * 0.587 + (n & 255) * 0.114) / 255 > 0.6;
+  }
+  function button(label, x, y, w, h, o = {}) {
+    const th = currentTheme();
+    const fill = o.fill || th.accent;
+    const fg = o.fg || (isLight(fill) ? '#111111' : '#FFFFFF');
+    ctx.save();
+    if (o.disabled) ctx.globalAlpha = 0.4;
+    rr(x, y, w, h, Math.min(h / 2, 40));
+    ctx.fillStyle = fill; ctx.fill();
+    if (o.outline) { ctx.lineWidth = 4; ctx.strokeStyle = o.outline; ctx.stroke(); }
+    ctx.restore();
+    text(label, x + w / 2, y + h / 2, o.size || 40, fg, 'center', o.disabled ? 0.4 : 1);
+    if (o.on) ui.push({ x, y, w, h, on: o.on });
+  }
+  function coinIcon(x, y, r) {
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fillStyle = '#FFD54A'; ctx.fill();
+    ctx.lineWidth = r * 0.18; ctx.strokeStyle = '#D39E00'; ctx.stroke();
+  }
+  function background(th) {
+    ctx.fillStyle = th.bg;
+    ctx.fillRect(0, 0, W, H);
+  }
+  function drawTube(tube, th, x, y, lift, selected) {
+    const y0 = y - lift;
+    rr(x, y0, 150, 300, 24);
+    ctx.fillStyle = th.tube; ctx.fill();
+    for (let j = 0; j < tube.length; j++) {
+      rr(x + 10, y0 + 294 - (j + 1) * 72 + 2, 130, 68, 14);
+      ctx.fillStyle = th.colors[tube[j]]; ctx.fill();
+      ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.25)'; ctx.stroke();
+    }
+    rr(x, y0, 150, 300, 24);
+    ctx.lineWidth = 8;
+    ctx.strokeStyle = selected ? th.accent : th.outline;
+    ctx.stroke();
+  }
+
+  // ---------- Screens ----------
+  const resetLabelArmed = () => performance.now() - resetArmedAt < 3000;
+
+  function drawMenu() {
+    const th = currentTheme();
+    background(th);
+    text('WATER SORT', W / 2, 330, 120, th.ink);
+    text('ENDLESS', W / 2, 450, 56, th.accent);
+
+    rr(140, 520, 800, 250, 36);
+    ctx.fillStyle = th.panel; ctx.fill();
+    text(`Level ${data.level}`, W / 2, 610, 84, th.ink);
+    text(`Best level ${data.best}   ·   ${data.coins} coins`, W / 2, 695, 40, th.ink, 'center', 0.8);
+
+    // Decorative tubes
+    const sample = [[0, 1, 0, 1], [1, 0, 1, 0], [], [2, 2, 2, 2]];
+    sample.forEach((tube, k) => {
+      ctx.save();
+      ctx.translate(240 + k * 160, 1540);
+      ctx.scale(0.8, 0.8);
+      drawTube(tube, th, 0, 0, 0, false);
+      ctx.restore();
+    });
+
+    button('PLAY', 220, 840, 640, 130, { size: 56, on: () => {
+      SFX.click();
+      if (game.level !== data.level || !game.tubes.length) startLevel();
+      screen = 'game';
+    } });
+    button('SHOP', 220, 1020, 640, 130, { size: 56, fill: th.panel, fg: th.ink, outline: th.outline, on: () => {
+      SFX.click(); shopMsg = ''; screen = 'shop';
+    } });
+    button(`SOUND: ${data.sound ? 'ON' : 'OFF'}`, 220, 1200, 640, 130, { size: 48, fill: th.panel, fg: th.ink, outline: th.outline, on: () => {
+      data.sound = !data.sound; saveData(); SFX.click();
+    } });
+    button(resetLabelArmed() ? 'TAP AGAIN TO CONFIRM' : 'RESET PROGRESS', 260, 1380, 560, 110, { size: 36, fill: th.panel, fg: th.ink, outline: th.outline, on: () => {
+      if (resetLabelArmed()) {
+        const sound = data.sound;
+        data = freshData(); data.sound = sound; saveData();
+        game.level = 0; game.tubes = []; resetArmedAt = -Infinity;
+        SFX.click();
+      } else {
+        resetArmedAt = performance.now(); SFX.click();
+      }
+    } });
+  }
+
+  function drawGame() {
+    const th = currentTheme();
+    background(th);
+
+    button('MENU', 40, 30, 200, 100, { size: 38, fill: th.panel, fg: th.ink, outline: th.outline, on: () => { SFX.click(); screen = 'menu'; } });
+    button('UNDO', 260, 30, 200, 100, { size: 38, fill: th.panel, fg: th.ink, outline: th.outline, disabled: game.won || !game.hist.length, on: undo });
+    button('RESTART', 480, 30, 240, 100, { size: 38, fill: th.panel, fg: th.ink, outline: th.outline, disabled: game.won, on: restart });
+
+    // Coin counter, top right
+    const coinsStr = String(data.coins);
+    ctx.font = 'bold 56px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+    const cw = ctx.measureText(coinsStr).width;
+    text(coinsStr, 1040, 80, 56, th.ink, 'right');
+    coinIcon(1040 - cw - 40, 80, 26);
+
+    text(`Level ${game.level}`, W / 2, 195, 80, th.ink);
+    text(`${game.colors} colors   ·   ${game.hist.length} moves`, W / 2, 262, 40, th.ink, 'center', 0.75);
+    text(game.status, W / 2, 318, 36, th.ink, 'center', 0.75);
+
+    for (let i = 0; i < game.tubes.length; i++) {
+      const r = tubeRect(i);
+      drawTube(game.tubes[i], th, r.x, r.y, game.lift[i] || 0, game.sel === i);
+    }
+
+    if (game.won) drawWinPanel(th);
+  }
+
+  function drawWinPanel(th) {
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(0, 0, W, H);
+    rr(150, 620, 780, 500, 44);
+    ctx.fillStyle = th.panel; ctx.fill();
+    text(`Level ${game.level} complete!`, W / 2, 705, 60, th.ink);
+    text(`+${game.reward} coins`, W / 2, 810, 84, th.ink);
+    text(game.usedUndo ? 'Undo was used, so no bonus' : 'No-undo bonus +5 included', W / 2, 880, 36, th.ink, 'center', 0.75);
+    button('NEXT LEVEL', 290, 940, 500, 120, { size: 48, fill: th.accent, on: () => { SFX.click(); startLevel(); } });
+  }
+
+  function buyOrEquip(th) {
+    if (data.owned.includes(th.id)) {
+      data.theme = th.id; saveData(); SFX.select();
+      shopMsg = `${th.name} equipped`;
+      return;
+    }
+    if (data.coins < th.price) {
+      SFX.error();
+      shopMsg = `You need ${th.price - data.coins} more coins`;
+      return;
+    }
+    data.coins -= th.price;
+    data.owned.push(th.id);
+    data.theme = th.id;
+    saveData(); SFX.buy();
+    shopMsg = `${th.name} unlocked and equipped`;
+  }
+
+  function drawShop() {
+    const th = currentTheme();
+    background(th);
+    text('SHOP', W / 2, 200, 110, th.ink);
+    const coinsStr = `${data.coins} coins`;
+    text(coinsStr, W / 2, 290, 44, th.ink, 'center', 0.85);
+
+    THEMES.forEach((item, k) => {
+      const x = 90, y = 360 + k * 190, w = 900, h = 170;
+      const owned = data.owned.includes(item.id);
+      const equipped = data.theme === item.id;
+      rr(x, y, w, h, 30);
+      ctx.fillStyle = item.bg; ctx.fill();
+      ctx.lineWidth = equipped ? 10 : 4;
+      ctx.strokeStyle = equipped ? item.accent : item.ink;
+      ctx.globalAlpha = equipped ? 1 : 0.35;
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+
+      text(item.name, x + 40, y + 62, 50, item.ink, 'left');
+      const status = equipped ? 'EQUIPPED' : owned ? 'Owned · tap to equip' : `${item.price} coins`;
+      text(status, x + 40, y + 122, 34, item.ink, 'left', 0.85);
+      for (let c = 0; c < 5; c++) {
+        rr(x + 520 + c * 72, y + 40, 56, 90, 14);
+        ctx.fillStyle = item.colors[c * 2]; ctx.fill();
+      }
+      ui.push({ x, y, w, h, on: () => buyOrEquip(item) });
+    });
+
+    if (shopMsg) text(shopMsg, W / 2, 1715, 40, th.ink, 'center', 0.85);
+    button('BACK', 290, 1770, 500, 110, { size: 44, fill: th.panel, fg: th.ink, outline: th.outline, on: () => { SFX.click(); screen = 'menu'; } });
+  }
+
+  // ---------- Input ----------
+  function toLogical(e) {
+    const r = canvas.getBoundingClientRect();
+    return { x: (e.clientX - r.left) * W / r.width, y: (e.clientY - r.top) * H / r.height };
+  }
+  canvas.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    audio(); // unlocks WebAudio on the first user gesture
+    const p = toLogical(e);
+    for (let k = ui.length - 1; k >= 0; k--) {
+      const b = ui[k];
+      if (p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h) { b.on(); return; }
+    }
+    if (screen === 'game' && !game.won) {
+      for (let i = 0; i < game.tubes.length; i++) {
+        const r = tubeRect(i);
+        if (p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h) { tapTube(i); return; }
+      }
+    }
+  });
+
+  // ---------- Main loop ----------
+  function update() {
+    if (screen !== 'game') return;
+    for (let i = 0; i < game.tubes.length; i++) {
+      const target = game.sel === i ? 50 : 0;
+      game.lift[i] += (target - game.lift[i]) * 0.3;
+    }
+  }
+  function frame() {
+    update();
+    ui = [];
+    if (screen === 'menu') drawMenu();
+    else if (screen === 'shop') drawShop();
+    else drawGame();
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
