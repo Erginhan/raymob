@@ -800,7 +800,7 @@
     });
 
     card(140, 1120, 800, 240, 44, th.card, th.line);
-    const cols = [270, 540, 810];
+    const cols = [270, 540, 808];
     text('LEVEL', cols[0], 1180, 26, th.muted, { weight: 700, spacing: 6 });
     text('BEST', cols[1], 1180, 26, th.muted, { weight: 700, spacing: 6 });
     text('COINS', cols[2], 1180, 26, th.muted, { weight: 700, spacing: 6 });
@@ -808,7 +808,7 @@
     text(String(data.best), cols[1], 1277, 84, th.ink, { weight: 800 });
     // Shrink the coin total if it is too wide for its column.
     const coinsStr = String(data.coins);
-    const size = Math.min(84, 84 * 190 / Math.max(1, measure(coinsStr, 84, 800)));
+    const size = Math.min(84, 84 * 160 / Math.max(1, measure(coinsStr, 84, 800)));
     const cw = measure(coinsStr, size, 800);
     const startX = cols[2] - (cw + 66) / 2;
     coin(startX + 24, 1277, 24);
