@@ -1,73 +1,103 @@
 <!doctype html>
 <html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Ultron</title>
 <style>
-html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:system-ui,sans-serif}
-canvas{position:fixed;inset:0;width:100%;height:100%}
-.h{position:fixed;left:0;right:0;text-align:center;letter-spacing:.6em;font-weight:300;pointer-events:none;color:#ff5a4a}
-#t{top:5vh;font-size:clamp(14px,2.2vw,22px);opacity:.75}
-#s{bottom:14vh;font-size:11px;opacity:.5}
-form{position:fixed;bottom:4vh;left:50%;transform:translateX(-50%);width:min(520px,calc(100% - 32px));display:flex;gap:8px;opacity:.3;transition:opacity .3s}
-form:hover,form:focus-within{opacity:1}
-input{flex:1;min-width:0;background:#0a0000;border:1px solid #401010;border-radius:20px;padding:10px 16px;color:#fcc;outline:none;font-size:14px}
-button{background:none;border:1px solid #401010;border-radius:20px;color:#f66;padding:0 14px;cursor:pointer}
+:root{--r:#ff3b30;--d:#4a1212;--a:#ffb020;--t:#ff8f86}
+html,body{margin:0;height:100%;background:#050000;overflow:hidden;font:12px ui-monospace,Menlo,Consolas,monospace;color:var(--t)}
+#g{position:fixed;inset:0;width:100%;height:100%}
+#leg{position:fixed;top:14px;right:14px;background:#0c0202cc;border:1px solid var(--d);border-radius:8px;padding:8px 12px;line-height:1.7;font-size:11px}
+#leg i{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:8px}#leg b{float:right;margin-left:22px;font-weight:400;opacity:.45}
+#p{position:fixed;right:24px;top:170px;width:300px;display:flex;flex-direction:column;align-items:center;gap:12px}
+#h{width:240px;height:240px}
+.row{display:flex;gap:8px;justify-content:center}
+.pill{border:1px solid var(--d);border-radius:12px;padding:3px 12px;font-size:10px;letter-spacing:.15em;background:#0c0202}
+.pill.on{border-color:var(--r);color:#fff}#st::before{content:'● ';color:var(--r)}
+.tab{cursor:pointer;opacity:.5}.tab.on{opacity:1;border-color:var(--r)}
+#sub{opacity:.5;font-size:11px;margin:6px 0}
+.tg{width:100%;box-sizing:border-box;display:flex;justify-content:space-between;border:1px solid var(--d);border-radius:6px;padding:8px 12px;letter-spacing:.15em;font-size:10px;cursor:pointer;background:#0c0202}
+.tg span{opacity:.4}.tg.on{border-color:var(--r)}.tg.on span{opacity:1;color:var(--r)}
+form{width:100%;display:flex;margin-top:6px}
+input{flex:1;min-width:0;background:#0c0202;border:1px solid var(--d);border-radius:6px;padding:8px 12px;color:#fcc;outline:none;font:inherit}
+@media(max-width:720px){#p{right:50%;top:20px;transform:translateX(50%)}#leg{display:none}}
 </style></head><body>
-<canvas id="c"></canvas><div id="t" class="h">ULTRON</div><div id="s" class="h">ÇEVRİMİÇİ</div>
-<form id="f"><input id="i" placeholder="Ultron'a söylet..." autocomplete="off"><button type="button" id="m">MİK</button><button>▶</button></form>
+<canvas id="g"></canvas>
+<div id="leg"></div>
+<div id="p">
+ <canvas id="h"></canvas>
+ <div class="row"><span class="pill on" id="st">IDLE</span><span class="pill">◆ ULTRON CORE</span></div>
+ <div class="row"><span class="pill tab on" data-m="0">RING</span><span class="pill tab" data-m="1">CUBE</span></div>
+ <div id="sub">● beklemede…</div>
+ <div class="tg on" data-k="graph">GRAPH <span>on</span></div>
+ <div class="tg" data-k="focus">FOCUS <span>off</span></div>
+ <div class="tg" data-k="mic">MIC <span>off</span></div>
+ <form id="f"><input id="i" placeholder="Ultron'a söylet…" autocomplete="off"></form>
+</div>
 <script>
-const c=document.getElementById('c'),x=c.getContext('2d'),S=document.getElementById('s');
-let W,H,D,R,lt=0,lvl=0,tgt=0,pulse=0,spk=0,an=null,fb,tb,ext=0,extT=-1e9,st='';
-function rs(){D=Math.min(devicePixelRatio||1,2);W=c.width=innerWidth*D;H=c.height=innerHeight*D;R=Math.min(W,H)*.16}
+const $=s=>document.querySelector(s),G=$('#g'),gx=G.getContext('2d'),Hc=$('#h'),hx=Hc.getContext('2d'),TAU=Math.PI*2,rnd=Math.random;
+let D,W,H,lt=0,lvl=0,tgt=0,pulse=0,spk=0,an=null,fb=new Uint8Array(128),tb,ext=0,extT=-1e9,mode=0,st='',opt={graph:1,focus:0,mic:0};
+function rs(){D=Math.min(devicePixelRatio||1,2);W=G.width=innerWidth*D;H=G.height=innerHeight*D;Hc.width=Hc.height=240*D}
 addEventListener('resize',rs);rs();
-// tek seferlik duman sprite'ı (her karede gradient yok)
-const sp=document.createElement('canvas');sp.width=sp.height=128;
-{const g=sp.getContext('2d'),r=g.createRadialGradient(64,64,0,64,64,64);r.addColorStop(0,'rgba(255,60,55,.5)');r.addColorStop(1,'rgba(255,30,30,0)');g.fillStyle=r;g.fillRect(0,0,128,128)}
-const N=56,rnd=Math.random,TAU=Math.PI*2;
-const rays=[...Array(N)].map((_,i)=>({a:i/N*TAU+(rnd()-.5)*.09,l:.55+rnd()*.9,p:rnd()*TAU,v:0}));
-const puffs=[...Array(64)].map(()=>({a:rnd()*TAU,r:.8+rnd()*.5,s:.3+rnd()*.6,p:rnd()*TAU,z:.5+rnd()*.8}));
+
+// --- bilgi grafiği ---
+const CAT=[['Concepts','#ff3b30'],['Skills','#ff7a2e'],['Tools','#ffb020'],['Worlds','#ff2d6f'],['Notes','#d0405a'],['Files','#7a4a4a']];
+const nodes=[],edges=[],cnt=CAT.map(()=>0);
+for(let h=0;h<8;h++){const hx0=.08+rnd()*.52,hy0=.12+rnd()*.76,hi=nodes.length;
+  nodes.push({x:hx0,y:hy0,r:5,c:h%CAT.length,p:rnd()*TAU,hub:1});cnt[h%CAT.length]++;
+  const n=8+rnd()*14|0;for(let k=0;k<n;k++){const a=rnd()*TAU,d=.03+rnd()*.13,c=rnd()*CAT.length|0;cnt[c]++;
+    nodes.push({x:hx0+Math.cos(a)*d*.7,y:hy0+Math.sin(a)*d,r:1.5+rnd()*2.5,c,p:rnd()*TAU});edges.push([hi,nodes.length-1])}
+  if(h)edges.push([hi,nodes.findIndex(n=>n.hub)])}
+for(let k=0;k<25;k++)edges.push([rnd()*nodes.length|0,rnd()*nodes.length|0]);
+$('#leg').innerHTML=CAT.map((c,i)=>`<div><i style="background:${c[1]}"></i>${c[0]}<b>${cnt[i]}</b></div>`).join('');
+
+function graph(t){
+  gx.fillStyle='#050000';gx.fillRect(0,0,W,H);if(!opt.graph)return;
+  const P=n=>[(n.x+.006*Math.sin(t*.3+n.p))*W,(n.y+.006*Math.cos(t*.25+n.p))*H],A=opt.focus?.35:1;
+  gx.globalAlpha=(.12+lvl*.15)*A;gx.strokeStyle='#ff5a4a';gx.lineWidth=.6*D;gx.beginPath();
+  for(const[a,b]of edges){const p=P(nodes[a]),q=P(nodes[b]);gx.moveTo(p[0],p[1]);gx.lineTo(q[0],q[1])}gx.stroke();
+  for(const n of nodes){const[p,q]=P(n);gx.globalAlpha=(.55+(n.hub?.45*lvl:0))*A;gx.fillStyle=CAT[n.c][1];
+    gx.beginPath();gx.arc(p,q,n.r*D*(n.hub?1+lvl*.4:1),0,TAU);gx.fill()}
+  gx.globalAlpha=1;
+}
+
+// --- HUD ---
+function hud(t){
+  const S=Hc.width,c=S/2,x=hx;x.clearRect(0,0,S,S);x.lineCap='round';
+  if(mode===0){
+    for(let i=0;i<120;i++){const a=i/120*TAU+t*.05,l=i%10?.025:.05,r=.47*S;x.globalAlpha=.45;x.strokeStyle='#ff3b30';x.lineWidth=D;
+      x.beginPath();x.moveTo(c+Math.cos(a)*r,c+Math.sin(a)*r);x.lineTo(c+Math.cos(a)*(r-l*S),c+Math.sin(a)*(r-l*S));x.stroke()}
+    x.globalAlpha=.9;x.strokeStyle='#ffb020';x.lineWidth=3*D;const a0=t*.35;x.beginPath();x.arc(c,c,.4*S,a0,a0+1.2);x.stroke();
+    x.globalAlpha=.4;x.strokeStyle='#ff3b30';x.lineWidth=D;x.beginPath();x.arc(c,c,.36*S,0,TAU);x.stroke();
+    x.setLineDash([2*D,6*D]);x.lineDashOffset=t*6;x.beginPath();x.arc(c,c,.29*S,0,TAU);x.stroke();x.setLineDash([]);
+    if(lvl>0){x.globalAlpha=Math.min(1,lvl*2.5);x.strokeStyle='#ff5a4a';x.lineWidth=2*D;x.beginPath();
+      for(let i=0;i<72;i++){const a=i/72*TAU-Math.PI/2,v=bin(i,72),r=.3*S,l=S*.008+S*.06*lvl*v;
+        x.moveTo(c+Math.cos(a)*r,c+Math.sin(a)*r);x.lineTo(c+Math.cos(a)*(r+l),c+Math.sin(a)*(r+l))}x.stroke()}
+  }else{
+    const s=S*.12*(1+lvl*.2),ry=t*.5,rx=.5+t*.2,V=[];
+    for(let i=0;i<8;i++){let X=(i&1?1:-1),Y=(i&2?1:-1),Z=(i&4?1:-1),k=1+lvl*.4*bin(i*9,72);X*=k;Y*=k;Z*=k;
+      let x1=X*Math.cos(ry)-Z*Math.sin(ry),z1=X*Math.sin(ry)+Z*Math.cos(ry),y1=Y*Math.cos(rx)-z1*Math.sin(rx),z2=Y*Math.sin(rx)+z1*Math.cos(rx),f=3/(4+z2);V.push([c+x1*s*f,c+y1*s*f])}
+    x.globalAlpha=.85;x.strokeStyle=lvl>.04?'#ffb020':'#ff3b30';x.lineWidth=1.5*D;x.beginPath();
+    for(let i=0;i<8;i++)for(const b of[1,2,4])if(!(i&b)){x.moveTo(...V[i]);x.lineTo(...V[i|b])}x.stroke();
+  }
+  const g=x.createRadialGradient(c,c,0,c,c,.24*S);g.addColorStop(0,`rgba(255,${60+120*lvl|0},40,${.25+.5*lvl})`);g.addColorStop(1,'rgba(80,0,0,0)');
+  x.globalAlpha=1;x.fillStyle=g;x.beginPath();x.arc(c,c,.24*S,0,TAU);x.fill();
+  if(mode===0){x.fillStyle='#ffd0c8';x.font=`bold ${11*D}px ui-monospace,monospace`;x.textAlign='center';x.textBaseline='middle';x.fillText('U.L.T.R.O.N.',c,c)}
+}
+const bv=new Float32Array(72);
+function bin(i,n){i%=n;const v=an&&performance.now()-extT>=300?fb[Math.abs(i/n*2-1)*fb.length*.6|0]/255:.5+.5*Math.sin(lt*(3+i%7)+i);return bv[i]+=(v-bv[i])*.25}
 
 function frame(now){
   const t=now/1000,dt=Math.min(.05,t-lt||.016);lt=t;
-  // ses seviyesi kaynağı: harici > analizör > TTS
   if(now-extT<300)tgt=ext;
   else if(an){an.getByteTimeDomainData(tb);an.getByteFrequencyData(fb);let s=0;for(const v of tb){const d=(v-128)/128;s+=d*d}tgt=Math.min(1,Math.sqrt(s/tb.length)*5);if(tgt<.03)tgt=0}
-  else if(spk){pulse*=Math.pow(.02,dt);tgt=.25+.3*(.5+.5*Math.sin(t*13))*(.5+.5*Math.sin(t*4.3))+.45*pulse}
-  else tgt=0;
-  // hızlı yükseliş, yumuşak sönüm → titreme yok
+  else if(spk){pulse*=Math.pow(.02,dt);tgt=.25+.3*(.5+.5*Math.sin(t*13))*(.5+.5*Math.sin(t*4.3))+.45*pulse}else tgt=0;
   lvl+=(tgt-lvl)*(1-Math.pow(tgt>lvl?1e-5:.12,dt));if(lvl<.002)lvl=0;
-  const ns=lvl>.04?'KONUŞUYOR':'ÇEVRİMİÇİ';if(ns!==st)S.textContent=st=ns;
-
-  const cx=W/2,cy=H/2,b=1+.02*Math.sin(t*1.2)+lvl*.08;
-  x.globalCompositeOperation='source-over';x.globalAlpha=1;x.fillStyle='#000';x.fillRect(0,0,W,H);
-  // ince HUD halkası
-  x.strokeStyle='#ff3c32';x.lineWidth=D;x.globalAlpha=.07+lvl*.12;x.setLineDash([2*D,14*D]);x.lineDashOffset=-t*8*D;
-  x.beginPath();x.arc(cx,cy,R*2.7,0,TAU);x.stroke();x.setLineDash([]);
-
-  x.globalCompositeOperation='lighter';
-  // duman halkası
-  x.globalAlpha=.2+lvl*.15;
-  for(const p of puffs){const a=p.a+t*.05*p.s+.1*Math.sin(t*p.s+p.p),rr=R*p.r*b*(1+.06*Math.sin(t*.7*p.s+p.p)),z=R*.9*p.z*(1+lvl*.3);
-    x.drawImage(sp,cx+Math.cos(a)*rr-z/2,cy+Math.sin(a)*rr-z/2,z,z)}
-  // ışınlar: sadece konuşurken
-  if(lvl>0){
-    const A=Math.min(1,lvl*2.5),bins=fb?fb.length*.6:0;
-    for(let i=0;i<N;i++){const r=rays[i];
-      const v=an&&now-extT>=300?fb[Math.floor(Math.abs(i/N*2-1)*bins)]/255:.5+.5*Math.sin(t*(2+r.l*3)+r.p);
-      r.v+=(v-r.v)*.25;
-      const r0=R*.35,r1=r0+R*(.5+2.3*lvl*r.l*(.35+.65*r.v)),ca=Math.cos(r.a),sa=Math.sin(r.a);
-      const g=x.createLinearGradient(cx+ca*r0,cy+sa*r0,cx+ca*r1,cy+sa*r1);
-      g.addColorStop(0,'rgba(255,230,150,.9)');g.addColorStop(.45,'rgba(255,70,60,.6)');g.addColorStop(1,'rgba(255,40,40,0)');
-      x.strokeStyle=g;x.beginPath();x.moveTo(cx+ca*r0,cy+sa*r0);x.lineTo(cx+ca*r1,cy+sa*r1);
-      x.globalAlpha=A*.25;x.lineWidth=3.5*D;x.stroke();x.globalAlpha=A;x.lineWidth=D;x.stroke()}
-  }
-  // çekirdek
-  const cr=R*.85*b*(1+lvl*.18),g=x.createRadialGradient(cx,cy,0,cx,cy,cr);
-  g.addColorStop(0,'rgba(255,250,225,1)');g.addColorStop(.25,'rgba(255,215,90,.95)');g.addColorStop(.6,'rgba(255,110,40,.35)');g.addColorStop(1,'rgba(255,50,30,0)');
-  x.globalAlpha=1;x.fillStyle=g;x.beginPath();x.arc(cx,cy,cr,0,TAU);x.fill();
-  requestAnimationFrame(frame);
+  const ns=lvl>.04?'SPEAKING':opt.mic?'LISTENING':'IDLE';
+  if(ns!==st){st=ns;$('#st').textContent=ns;$('#sub').textContent='● '+{SPEAKING:'konuşuyor…',LISTENING:'dinliyor…',IDLE:'beklemede…'}[ns]}
+  graph(t);hud(t);requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
 
-let ac;
+// --- ses ---
+let ac,micS;
 function mkAn(src,out){ac=ac||new AudioContext();ac.resume();an=ac.createAnalyser();an.fftSize=256;an.smoothingTimeConstant=.6;
   fb=new Uint8Array(an.frequencyBinCount);tb=new Uint8Array(an.fftSize);src.connect(an);if(out)an.connect(ac.destination)}
 function speak(txt){if(!txt)return;speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(txt),vs=speechSynthesis.getVoices();
@@ -75,13 +105,15 @@ function speak(txt){if(!txt)return;speechSynthesis.cancel();const u=new SpeechSy
   u.onstart=()=>spk=1;u.onend=u.onerror=()=>spk=0;u.onboundary=()=>pulse=1;speechSynthesis.speak(u)}
 function connect(el){ac=ac||new AudioContext();mkAn(ac.createMediaElementSource(el),1)}
 function play(url){const a=new Audio(url);a.crossOrigin='anonymous';connect(a);a.play()}
-async function mic(){const s=await navigator.mediaDevices.getUserMedia({audio:true});ac=ac||new AudioContext();mkAn(ac.createMediaStreamSource(s),0)}
+async function mic(on){if(!on){micS&&micS.getTracks().forEach(t=>t.stop());an=null;return}
+  micS=await navigator.mediaDevices.getUserMedia({audio:true});ac=ac||new AudioContext();mkAn(ac.createMediaStreamSource(micS),0)}
 window.Ultron={speak,connect,play,mic,level:v=>{ext=v;extT=performance.now()}};
 
-document.getElementById('f').onsubmit=e=>{e.preventDefault();const i=document.getElementById('i');speak(i.value);i.value=''};
-document.getElementById('m').onclick=()=>mic().catch(()=>{});
-// Masaüstü asistan bağlantısı: index.html?ws=ws://localhost:8765
-// Mesajlar: {"say":"metin"} | {"level":0..1} | {"audio":"url"}
+document.querySelectorAll('.tab').forEach(e=>e.onclick=()=>{mode=+e.dataset.m;document.querySelectorAll('.tab').forEach(o=>o.classList.toggle('on',o===e))});
+document.querySelectorAll('.tg').forEach(e=>e.onclick=async()=>{const k=e.dataset.k,v=opt[k]=1-opt[k];
+  if(k==='mic')try{await mic(v)}catch{opt.mic=0}e.classList.toggle('on',!!opt[k]);e.lastChild.textContent=opt[k]?'on':'off'});
+$('#f').onsubmit=e=>{e.preventDefault();speak($('#i').value);$('#i').value=''};
+// Masaüstü asistan: index.html?ws=ws://localhost:8765  →  {"say":".."} | {"level":0..1} | {"audio":"url"}
 const q=new URLSearchParams(location.search).get('ws');
 if(q)(function ws(){const s=new WebSocket(q);s.onmessage=e=>{try{const m=JSON.parse(e.data);if(m.say)speak(m.say);if(m.level!=null)Ultron.level(+m.level);if(m.audio)play(m.audio)}catch{}};s.onclose=()=>setTimeout(ws,2000)})();
 </script></body></html>
