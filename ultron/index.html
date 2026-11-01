@@ -4,9 +4,9 @@
 :root{--r:#ff3b30;--d:#4a1212;--a:#ffb020;--t:#ff8f86}
 html,body{margin:0;height:100%;background:#050000;overflow:hidden;font:12px ui-monospace,Menlo,Consolas,monospace;color:var(--t)}
 #g{position:fixed;inset:0;width:100%;height:100%}
-#leg{position:fixed;top:14px;right:14px;background:#0c0202cc;border:1px solid var(--d);border-radius:8px;padding:8px 12px;line-height:1.7;font-size:11px}
+#leg{position:fixed;top:14px;left:14px;background:#0c0202cc;border:1px solid var(--d);border-radius:8px;padding:8px 12px;line-height:1.7;font-size:11px}
 #leg i{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:8px}#leg b{float:right;margin-left:22px;font-weight:400;opacity:.45}
-#p{position:fixed;right:24px;top:170px;width:300px;display:flex;flex-direction:column;align-items:center;gap:12px}
+#p{position:fixed;right:24px;top:50%;transform:translateY(-50%);width:300px;display:flex;flex-direction:column;align-items:center;gap:12px}
 #h{width:240px;height:240px}
 .row{display:flex;gap:8px;justify-content:center}
 .pill{border:1px solid var(--d);border-radius:12px;padding:3px 12px;font-size:10px;letter-spacing:.15em;background:#0c0202}
@@ -16,7 +16,10 @@ html,body{margin:0;height:100%;background:#050000;overflow:hidden;font:12px ui-m
 .tg{width:100%;box-sizing:border-box;display:flex;justify-content:space-between;border:1px solid var(--d);border-radius:6px;padding:8px 12px;letter-spacing:.15em;font-size:10px;cursor:pointer;background:#0c0202}
 .tg span{opacity:.4}.tg.on{border-color:var(--r)}.tg.on span{opacity:1;color:var(--r)}
 form{width:100%;display:flex;margin-top:6px}
+#card{position:fixed;left:16px;bottom:16px;width:min(380px,calc(100% - 32px));max-height:40vh;overflow:auto;background:#0c0202ee;border:1px solid var(--d);border-radius:8px;padding:12px;box-sizing:border-box}
+#cb{white-space:pre-wrap;opacity:.75;margin:8px 0}a{color:inherit;text-decoration:none}
 input{flex:1;min-width:0;background:#0c0202;border:1px solid var(--d);border-radius:6px;padding:8px 12px;color:#fcc;outline:none;font:inherit}
+@media(max-height:760px){#h{width:180px;height:180px}#p{gap:7px}}
 @media(max-width:720px){#p{right:50%;top:20px;transform:translateX(50%)}#leg{display:none}}
 </style></head><body>
 <canvas id="g"></canvas>
@@ -29,8 +32,10 @@ input{flex:1;min-width:0;background:#0c0202;border:1px solid var(--d);border-rad
  <div class="tg on" data-k="graph">GRAPH <span>on</span></div>
  <div class="tg" data-k="focus">FOCUS <span>off</span></div>
  <div class="tg" data-k="mic">MIC <span>off</span></div>
- <form id="f"><input id="i" placeholder="Ultron'a söylet…" autocomplete="off"></form>
+ <div class="tg" id="vb">OBSIDIAN VAULT <span>bağla</span></div>
+ <form id="f"><input id="i" placeholder="söylet · ara: not adı · not: metin" autocomplete="off"></form>
 </div>
+<div id="card" hidden><b id="ct"></b><div id="cb"></div><div class="row"><span class="pill tab on" id="cr">OKU</span><a class="pill tab on" id="co">OBSIDIAN'DA AÇ</a><span class="pill tab" onclick="card.hidden=1">✕</span></div></div>
 <script>
 const $=s=>document.querySelector(s),G=$('#g'),gx=G.getContext('2d'),Hc=$('#h'),hx=Hc.getContext('2d'),TAU=Math.PI*2,rnd=Math.random;
 let D,W,H,lt=0,lvl=0,tgt=0,pulse=0,spk=0,an=null,fb=new Uint8Array(128),tb,ext=0,extT=-1e9,mode=0,st='',opt={graph:1,focus:0,mic:0};
@@ -38,19 +43,48 @@ function rs(){D=Math.min(devicePixelRatio||1,2);W=G.width=innerWidth*D;H=G.heigh
 addEventListener('resize',rs);rs();
 
 // --- bilgi grafiği ---
-const CAT=[['Concepts','#ff3b30'],['Skills','#ff7a2e'],['Tools','#ffb020'],['Worlds','#ff2d6f'],['Notes','#d0405a'],['Files','#7a4a4a']];
-const nodes=[],edges=[],cnt=CAT.map(()=>0);
+const PAL=['#ff3b30','#ff7a2e','#ffb020','#ff2d6f','#d0405a','#c46a4a','#ff9e8a','#7a4a4a'];
+let CAT=[['Concepts'],['Skills'],['Tools'],['Worlds'],['Notes'],['Files']].map((c,i)=>[c[0],PAL[i]]),nodes=[],edges=[],vault=null,vname='',P=()=>[0,0];
 for(let h=0;h<8;h++){const hx0=.08+rnd()*.52,hy0=.12+rnd()*.76,hi=nodes.length;
-  nodes.push({x:hx0,y:hy0,r:5,c:h%CAT.length,p:rnd()*TAU,hub:1});cnt[h%CAT.length]++;
-  const n=8+rnd()*14|0;for(let k=0;k<n;k++){const a=rnd()*TAU,d=.03+rnd()*.13,c=rnd()*CAT.length|0;cnt[c]++;
-    nodes.push({x:hx0+Math.cos(a)*d*.7,y:hy0+Math.sin(a)*d,r:1.5+rnd()*2.5,c,p:rnd()*TAU});edges.push([hi,nodes.length-1])}
-  if(h)edges.push([hi,nodes.findIndex(n=>n.hub)])}
+  nodes.push({x:hx0,y:hy0,r:5,c:h%6,p:rnd()*TAU,hub:1});
+  const n=8+rnd()*14|0;for(let k=0;k<n;k++){const a=rnd()*TAU,d=.03+rnd()*.13;
+    nodes.push({x:hx0+Math.cos(a)*d*.7,y:hy0+Math.sin(a)*d,r:1.5+rnd()*2.5,c:rnd()*6|0,p:rnd()*TAU});edges.push([hi,nodes.length-1])}
+  if(h)edges.push([hi,0])}
 for(let k=0;k<25;k++)edges.push([rnd()*nodes.length|0,rnd()*nodes.length|0]);
-$('#leg').innerHTML=CAT.map((c,i)=>`<div><i style="background:${c[1]}"></i>${c[0]}<b>${cnt[i]}</b></div>`).join('');
+function legend(){const n=CAT.map(()=>0);nodes.forEach(o=>n[o.c]++);$('#leg').innerHTML=CAT.map((c,i)=>`<div><i style="background:${c[1]}"></i>${c[0]}<b>${n[i]}</b></div>`).join('')}
+legend();
+
+// --- Obsidian kasası: notlar = düğümler, [[bağlantılar]] = kenarlar, üst klasör = renk ---
+async function loadVault(){const fs=[];
+  if(window.showDirectoryPicker){vault=await showDirectoryPicker({mode:'readwrite'});vname=vault.name;
+    const walk=async(d,p)=>{for await(const[n,h]of d.entries()){if(n[0]=='.')continue;
+      if(h.kind=='directory')await walk(h,p+n+'/');else if(n.endsWith('.md'))fs.push({path:p+n,text:await(await h.getFile()).text()})}};await walk(vault,'')}
+  else await new Promise(res=>{const i=document.createElement('input');i.type='file';i.webkitdirectory=1;i.onchange=async()=>{
+    for(const f of i.files){const r=f.webkitRelativePath;if(!r.endsWith('.md')||/\/\./.test(r))continue;vname=r.split('/')[0];fs.push({path:r.slice(vname.length+1),text:await f.text()})}res()};i.click()});
+  build(fs.slice(0,800))}
+function build(fs){const idx={},fol=[];
+  nodes=fs.map((f,i)=>{const s=f.path.split('/'),name=s.pop().replace(/\.md$/,''),top=s[0]||'Notlar';let c=fol.indexOf(top);if(c<0)c=fol.push(top)-1;
+    idx[name.toLowerCase()]=i;return{...f,name,c:Math.min(c,PAL.length-1),x:rnd(),y:rnd(),p:rnd()*TAU,r:1.5}});
+  edges=[];nodes.forEach((n,i)=>{for(const m of n.text.matchAll(/\[\[([^\]|#]+)/g)){const j=idx[m[1].trim().split('/').pop().toLowerCase()];if(j!=null&&j!==i)edges.push([i,j])}});
+  edges.forEach(([a,b])=>{nodes[a].r+=.5;nodes[b].r+=.5});nodes.forEach(n=>{n.r=Math.min(n.r,7);n.hub=n.r>4});
+  const L=nodes.length,k=.8/Math.sqrt(L+1);
+  for(let it=0,T=.06;it<150;it++,T*=.97){for(const n of nodes){n.vx=(.5-n.x)*k;n.vy=(.5-n.y)*k}
+    for(let i=0;i<L;i++)for(let j=i+1;j<L;j++){const a=nodes[i],b=nodes[j],dx=a.x-b.x,dy=a.y-b.y,f=k*k/(dx*dx+dy*dy+1e-6);a.vx+=dx*f;a.vy+=dy*f;b.vx-=dx*f;b.vy-=dy*f}
+    for(const[i,j]of edges){const a=nodes[i],b=nodes[j],dx=a.x-b.x,dy=a.y-b.y,f=Math.hypot(dx,dy)/k;a.vx-=dx*f;a.vy-=dy*f;b.vx+=dx*f;b.vy+=dy*f}
+    for(const n of nodes){const d=Math.hypot(n.vx,n.vy)+1e-9,s=Math.min(d,T)/d;n.x+=n.vx*s;n.y+=n.vy*s}}
+  const xs=nodes.map(n=>n.x),ys=nodes.map(n=>n.y),x0=Math.min(...xs),x1=Math.max(...xs)-x0||1,y0=Math.min(...ys),y1=Math.max(...ys)-y0||1;
+  nodes.forEach(n=>{n.x=.05+(n.x-x0)/x1*.55;n.y=.08+(n.y-y0)/y1*.84});
+  CAT=fol.slice(0,PAL.length).map((f,i)=>[i==PAL.length-1&&fol.length>PAL.length?'Diğer':f,PAL[i]]);legend();
+  $('#vb').classList.add('on');$('#vb').lastChild.textContent=vname+' · '+L}
+function showNote(n){card.hidden=0;ct.textContent=n.name||'Demo düğüm';cb.textContent=n.text?n.text.slice(0,800):'Kasanı bağla: OBSIDIAN VAULT';
+  co.href=n.path?`obsidian://open?vault=${encodeURIComponent(vname)}&file=${encodeURIComponent(n.path)}`:'#';
+  cr.onclick=()=>n.text&&speak(n.text.replace(/[#*>\[\]`_|-]+/g,' ').slice(0,600))}
+G.onclick=e=>{let b=null,bd=(14*D)**2;for(const n of nodes){const[p,q]=P(n),d=(p-e.clientX*D)**2+(q-e.clientY*D)**2;if(d<bd){bd=d;b=n}}if(b)showNote(b)};
+$('#vb').onclick=()=>loadVault().catch(()=>{});
 
 function graph(t){
   gx.fillStyle='#050000';gx.fillRect(0,0,W,H);if(!opt.graph)return;
-  const P=n=>[(n.x+.006*Math.sin(t*.3+n.p))*W,(n.y+.006*Math.cos(t*.25+n.p))*H],A=opt.focus?.35:1;
+  P=n=>[(n.x+.006*Math.sin(t*.3+n.p))*W,(n.y+.006*Math.cos(t*.25+n.p))*H];const A=opt.focus?.35:1;
   gx.globalAlpha=(.12+lvl*.15)*A;gx.strokeStyle='#ff5a4a';gx.lineWidth=.6*D;gx.beginPath();
   for(const[a,b]of edges){const p=P(nodes[a]),q=P(nodes[b]);gx.moveTo(p[0],p[1]);gx.lineTo(q[0],q[1])}gx.stroke();
   for(const n of nodes){const[p,q]=P(n);gx.globalAlpha=(.55+(n.hub?.45*lvl:0))*A;gx.fillStyle=CAT[n.c][1];
@@ -110,9 +144,13 @@ async function mic(on){if(!on){micS&&micS.getTracks().forEach(t=>t.stop());an=nu
 window.Ultron={speak,connect,play,mic,level:v=>{ext=v;extT=performance.now()}};
 
 document.querySelectorAll('.tab').forEach(e=>e.onclick=()=>{mode=+e.dataset.m;document.querySelectorAll('.tab').forEach(o=>o.classList.toggle('on',o===e))});
-document.querySelectorAll('.tg').forEach(e=>e.onclick=async()=>{const k=e.dataset.k,v=opt[k]=1-opt[k];
+document.querySelectorAll('.tg[data-k]').forEach(e=>e.onclick=async()=>{const k=e.dataset.k,v=opt[k]=1-opt[k];
   if(k==='mic')try{await mic(v)}catch{opt.mic=0}e.classList.toggle('on',!!opt[k]);e.lastChild.textContent=opt[k]?'on':'off'});
-$('#f').onsubmit=e=>{e.preventDefault();speak($('#i').value);$('#i').value=''};
+$('#f').onsubmit=async e=>{e.preventDefault();const v=$('#i').value.trim();$('#i').value='';let m;
+  if(m=v.match(/^not:\s*(.+)/i)){if(!vault)return speak('Önce kasayı bağla.');const h=await vault.getFileHandle('Ultron.md',{create:true}),old=await(await h.getFile()).text(),w=await h.createWritable();
+    await w.write(old+`\n- ${new Date().toLocaleString('tr-TR')} ${m[1]}`);await w.close();speak('Not eklendi.')}
+  else if(m=v.match(/^ara:\s*(.+)/i)){const n=nodes.find(n=>n.name&&n.name.toLowerCase().includes(m[1].toLowerCase()));n?(showNote(n),speak(n.name)):speak('Bulamadım.')}
+  else speak(v)};
 // Masaüstü asistan: index.html?ws=ws://localhost:8765  →  {"say":".."} | {"level":0..1} | {"audio":"url"}
 const q=new URLSearchParams(location.search).get('ws');
 if(q)(function ws(){const s=new WebSocket(q);s.onmessage=e=>{try{const m=JSON.parse(e.data);if(m.say)speak(m.say);if(m.level!=null)Ultron.level(+m.level);if(m.audio)play(m.audio)}catch{}};s.onclose=()=>setTimeout(ws,2000)})();
