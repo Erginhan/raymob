@@ -56,10 +56,10 @@ legend();
 
 // --- Obsidian kasası: notlar = düğümler, [[bağlantılar]] = kenarlar, üst klasör = renk ---
 async function loadVault(){const fs=[];
-  if(window.showDirectoryPicker){vault=await showDirectoryPicker({mode:'readwrite'});vname=vault.name;
+  let ok=0;if(window.showDirectoryPicker)try{vault=await showDirectoryPicker({mode:'readwrite'});vname=vault.name;
     const walk=async(d,p)=>{for await(const[n,h]of d.entries()){if(n[0]=='.')continue;
-      if(h.kind=='directory')await walk(h,p+n+'/');else if(n.endsWith('.md'))fs.push({path:p+n,text:await(await h.getFile()).text()})}};await walk(vault,'')}
-  else await new Promise(res=>{const i=document.createElement('input');i.type='file';i.webkitdirectory=1;i.onchange=async()=>{
+      if(h.kind=='directory')await walk(h,p+n+'/');else if(n.endsWith('.md'))fs.push({path:p+n,text:await(await h.getFile()).text()})}};await walk(vault,'');ok=1}catch(e){vault=null;if(e.name=='AbortError')return}
+  if(!ok)await new Promise(res=>{const i=document.createElement('input');i.type='file';i.webkitdirectory=1;i.onchange=async()=>{
     for(const f of i.files){const r=f.webkitRelativePath;if(!r.endsWith('.md')||/\/\./.test(r))continue;vname=r.split('/')[0];fs.push({path:r.slice(vname.length+1),text:await f.text()})}res()};i.click()});
   build(fs.slice(0,800))}
 function build(fs){const idx={},fol=[];
